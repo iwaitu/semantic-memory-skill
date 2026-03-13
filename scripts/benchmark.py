@@ -68,9 +68,13 @@ def test_semantic_memory(memory: SemanticMemory):
     
     # 统计信息
     print("\n1. 统计信息...")
-    stats = memory.get_stats()
-    print(f"   集合：{stats.get('collection_name', 'N/A')}")
-    print(f"   总记忆数：{stats.get('total_memories', 'N/A')}")
+    try:
+        from qdrant_client.http import models
+        collection_info = memory.qdrant_client.get_collection(memory.collection_name)
+        print(f"   集合：{memory.collection_name}")
+        print(f"   总记忆数：{collection_info.points_count or '未知'}")
+    except Exception as e:
+        print(f"   ⚠️ 统计信息获取失败：{e}")
     
     # 添加测试记忆
     print("\n2. 添加测试记忆...")
@@ -96,12 +100,15 @@ def test_semantic_memory(memory: SemanticMemory):
     ]
     
     for query in queries:
-        results = memory.search_memories(query, limit=3)
-        print(f"\n   查询：\"{query}\"")
-        for i, r in enumerate(results, 1):
-            score = r['score']
-            text = r['text'][:50]
-            print(f"     {i}. [{score:.3f}] {text}...")
+        try:
+            results = memory.search_memories(query, limit=3)
+            print(f"\n   查询：\"{query}\"")
+            for i, r in enumerate(results, 1):
+                score = r['score']
+                text = r['text'][:50]
+                print(f"     {i}. [{score:.3f}] {text}...")
+        except Exception as e:
+            print(f"\n   查询：\"{query}\" - 错误：{e}")
     
     # 更新统计
     print("\n4. 更新统计...")

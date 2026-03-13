@@ -165,10 +165,10 @@ class SemanticMemory:
                 )
             scroll_filter = models.Filter(must=conditions)
         
-        # 搜索
-        results = self.qdrant_client.search(
+        # 搜索 (使用 query 接口替代 search)
+        results = self.qdrant_client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_embedding,
+            query=query_embedding,
             limit=limit,
             score_threshold=score_threshold,
             query_filter=scroll_filter
@@ -176,7 +176,7 @@ class SemanticMemory:
         
         # 格式化结果
         memories = []
-        for result in results:
+        for result in results.points:
             memories.append({
                 "id": result.id,
                 "text": result.payload.get("text", ""),

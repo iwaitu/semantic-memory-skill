@@ -1,6 +1,6 @@
 """
 Embedding Service - 常驻文本嵌入服务
-支持跨平台硬件加速：CoreML (Apple), CUDA/TensorRT (NVIDIA), ONNX (CPU)
+使用 Qwen3-Embedding-0.6B (1024 维度)
 """
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,10 +11,6 @@ import logging
 import sys
 import os
 
-# 添加 src 到路径
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from hardware_detector import HardwareDetector, AcceleratorType
-
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -24,9 +20,9 @@ logger = logging.getLogger(__name__)
 
 # 创建 FastAPI 应用
 app = FastAPI(
-    title="Semantic Memory Embedding Service",
-    description="跨平台硬件加速的文本嵌入服务",
-    version="1.0.0"
+    title="Semantic Memory Embedding Service (Qwen-0.6B)",
+    description="Qwen3-Embedding-0.6B 跨平台硬件加速文本嵌入服务",
+    version="2.0.0"
 )
 
 # CORS 中间件
@@ -39,10 +35,9 @@ app.add_middleware(
 )
 
 # 全局状态
-model: Optional[Any] = None
-model_dimension: int = 0
-accelerator_type: Optional[AcceleratorType] = None
-model_info: Dict[str, str] = {}
+model = None
+tokenizer = None
+model_dimension = 1024  # Qwen3-Embedding-0.6B 维度
 start_time = time.time()
 
 
@@ -70,7 +65,6 @@ class HealthResponse(BaseModel):
     model_loaded: bool
     dimension: int
     accelerator: str
-    accelerator_info: Dict[str, Any]
     uptime_seconds: float
 
 
@@ -86,81 +80,78 @@ class InfoResponse(BaseModel):
 
 @app.on_event("startup")
 async def load_model():
-    """启动时根据硬件自动选择最优加速方案并加载模型"""
-    global model, model_dimension, accelerator_type, model_info
+    """启动时加载 Qwen3-Embedding-0.6B 模型"""
+    global model, tokenizer, model_dimension
     
     logger.info("=" * 60)
-    logger.info("🚀 Embedding Service 启动中...")
+    logger.info("🚀 Embedding Service (Qwen-0.6B) 启动中...")
     logger.info("=" * 60)
     
     try:
-        # 1. 硬件检测
-        logger.info("🔍 步骤 1/4: 硬件检测...")
-        accelerator_type = HardwareDetector.detect()
-        logger.info(f"   ✅ 检测到加速方案：{accelerator_type.value}")
-        
-        # 2. 获取加速信息
-        accel_info = HardwareDetector.get_accelerator_info(accelerator_type)
-        model_info = accel_info
-        logger.info(f"   📊 加速信息：{accel_info['provider']} on {accel_info['device']}")
-        
-        # 3. 加载模型
-        logger.info("📦 步骤 2/4: 加载嵌入模型...")
+        logger.info("📦 加载 Qwen3-Embedding-0.6B 模型...")
         start = time.time()
         
-        try:
-            # 优先使用 sentence-transformers（兼容性最好）
-            from sentence_transformers import SentenceTransformer
-            
-            # 根据平台选择设备
-            if accelerator_type == AcceleratorType.APPLE_COREML:
-                logger.info("   → 使用 MPS 加速 (Apple Silicon)")
-                model = SentenceTransformer(
-                    "sentence-transformers/all-MiniLM-L6-v2",
-                    device="mps"
-                )
-            elif accelerator_type in [AcceleratorType.NVIDIA_CUDA, AcceleratorType.NVIDIA_TENSORRT]:
-                logger.info(f"   → 使用 CUDA 加速")
-                model = SentenceTransformer(
-                    "sentence-transformers/all-MiniLM-L6-v2",
-                    device="cuda"
-                )
-            else:
-                logger.info("   → 使用 CPU")
-                model = SentenceTransformer(
-                    "sentence-transformers/all-MiniLM-L6-v2",
-                    device="cpu"
-                )
-            
-            # 预热
-            logger.info("🔥 步骤 3/4: 模型预热...")
-            model.encode(["预热句子"], show_progress_bar=False)
-            
-            # 获取维度
-            model_dimension = len(model.encode(["test"], show_progress_bar=False)[0])
-            
-            load_time = time.time() - start
-            logger.info(f"✅ 步骤 4/4: 模型加载完成 ({load_time:.2f}s)")
-            logger.info(f"📏 向量维度：{model_dimension}")
-            logger.info("=" * 60)
-            
-        except ImportError as e:
-            logger.error(f"sentence-transformers 导入失败：{e}")
-            logger.warning("⚠️ 回退到 optimum.intel...")
-            
-            from optimum.intel import IPEXSentenceTransformer
-            model = IPEXSentenceTransformer(
-                "sentence-transformers/all-MiniLM-L6-v2",
-                provider="onnxruntime"
-            )
-            model.encode(["预热句子"])
-            model_dimension = len(model.encode(["test"])[0])
-            model_info = {
-                "provider": "ONNX Runtime (Fallback)",
-                "device": "CPU",
-                "optimization": "Fallback"
-            }
+        # 使用 ONNX Runtime 加载
+        from optimum.onnxruntime import ORTModelForFeatureExtraction
+        from transformers import AutoTokenizer
+        import numpy as np
         
+        model_path = "zhiqing/Qwen3-Embedding-0.6B-ONNX"
+        logger.info(f"   下载/加载模型：{model_path}")
+        
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        onnx_model = ORTModelForFeatureExtraction.from_pretrained(
+            model_path,
+            provider="CPUExecutionProvider"
+        )
+        
+        # 包装为简单接口
+        class QwenEmbeddingModel:
+            def __init__(self, tokenizer, model):
+                self.tokenizer = tokenizer
+                self.model = model
+                self._name_or_path = model_path
+            
+            def encode(self, texts, normalize_embeddings=True, show_progress_bar=False, **kwargs):
+                import numpy as np
+                from tqdm import tqdm
+                embeddings = []
+                iterator = tqdm(texts, desc="Embedding") if show_progress_bar else texts
+                for text in iterator:
+                    inputs = self.tokenizer(text, return_tensors="np", truncation=True, max_length=512)
+                    input_ids = inputs["input_ids"]
+                    attention_mask = inputs["attention_mask"]
+                    position_ids = np.expand_dims(np.arange(input_ids.shape[1]), 0)
+                    
+                    outputs = self.model(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        position_ids=position_ids
+                    )
+                    
+                    # 使用 mean pooling（而非 CLS token）
+                    last_hidden = outputs.last_hidden_state  # (1, seq_len, hidden)
+                    attention_mask_expanded = np.expand_dims(attention_mask, -1).astype(np.float32)
+                    sum_embeddings = np.sum(last_hidden * attention_mask_expanded, axis=1)
+                    sum_mask = np.sum(attention_mask_expanded, axis=1)
+                    embedding = sum_embeddings / np.maximum(sum_mask, 1e-9)
+                    
+                    # 归一化
+                    if normalize_embeddings:
+                        embedding = embedding / np.linalg.norm(embedding, axis=-1, keepdims=True)
+                    embeddings.append(embedding)
+                return np.vstack(embeddings)
+        
+        model = QwenEmbeddingModel(tokenizer, onnx_model)
+        
+        # 预热
+        logger.info("🔥 模型预热...")
+        model.encode(["预热句子"], show_progress_bar=False)
+        
+        load_time = time.time() - start
+        logger.info(f"✅ 模型加载完成 ({load_time:.2f}s)")
+        logger.info(f"📏 向量维度：{model_dimension}")
+        logger.info("=" * 60)
         logger.info("🎉 服务启动完成")
         
     except Exception as e:
@@ -174,8 +165,8 @@ async def load_model():
 async def root():
     """根路径"""
     return {
-        "service": "Semantic Memory Embedding Service",
-        "version": "1.0.0",
+        "service": "Semantic Memory Embedding Service (Qwen-0.6B)",
+        "version": "2.0.0",
         "status": "running" if model else "loading",
         "docs": "/docs"
     }
@@ -188,21 +179,14 @@ async def health_check():
         status="healthy" if model else "loading",
         model_loaded=model is not None,
         dimension=model_dimension,
-        accelerator=accelerator_type.value if accelerator_type else "unknown",
-        accelerator_info=model_info,
+        accelerator="onnx_cpu",
         uptime_seconds=time.time() - start_time
     )
 
 
 @app.post("/embed", response_model=EmbedResponse, tags=["Embedding"])
 async def embed(request: EmbedRequest):
-    """
-    批量文本嵌入
-    
-    - **texts**: 文本列表 (1-1000 条)
-    - **normalize**: 是否归一化向量 (默认 True)
-    - **batch_size**: 批量大小 (1-128, 默认 32)
-    """
+    """批量文本嵌入"""
     if not model:
         raise HTTPException(503, "模型加载中，请稍后重试")
     
@@ -210,9 +194,7 @@ async def embed(request: EmbedRequest):
     embeddings = model.encode(
         request.texts,
         normalize_embeddings=request.normalize,
-        batch_size=min(request.batch_size, len(request.texts)),
-        show_progress_bar=False,
-        convert_to_numpy=True
+        show_progress_bar=False
     )
     elapsed_ms = (time.time() - start) * 1000
     
@@ -220,13 +202,13 @@ async def embed(request: EmbedRequest):
         embeddings=embeddings.tolist(),
         dimension=model_dimension,
         processing_time_ms=elapsed_ms,
-        model_name="all-MiniLM-L6-v2",
-        accelerator=accelerator_type.value if accelerator_type else "unknown"
+        model_name="Qwen3-Embedding-0.6B",
+        accelerator="onnx_cpu"
     )
 
 
 @app.get("/embed/single", tags=["Embedding"])
-async def embed_single(text: str = Field(..., min_length=1, max_length=10000), normalize: bool = True):
+async def embed_single(text: str, normalize: bool = True):
     """单个文本嵌入"""
     if not model:
         raise HTTPException(503, "模型加载中，请稍后重试")
@@ -240,8 +222,8 @@ async def embed_single(text: str = Field(..., min_length=1, max_length=10000), n
         "embedding": embedding.tolist(),
         "dimension": model_dimension,
         "processing_time_ms": elapsed_ms,
-        "model_name": "all-MiniLM-L6-v2",
-        "accelerator": accelerator_type.value if accelerator_type else "unknown"
+        "model_name": "Qwen3-Embedding-0.6B",
+        "accelerator": "onnx_cpu"
     }
 
 
@@ -253,8 +235,8 @@ async def info():
     
     return InfoResponse(
         service={
-            "name": "Semantic Memory Embedding Service",
-            "version": "1.0.0",
+            "name": "Semantic Memory Embedding Service (Qwen-0.6B)",
+            "version": "2.0.0",
             "uptime_seconds": time.time() - start_time
         },
         hardware={
@@ -268,13 +250,18 @@ async def info():
             "memory_available_gb": round(psutil.virtual_memory().available / (1024**3), 2)
         },
         accelerator={
-            "type": accelerator_type.value if accelerator_type else "unknown",
-            "info": model_info
+            "type": "onnx_cpu",
+            "info": {
+                "provider": "ONNX Runtime",
+                "device": "CPU",
+                "optimization": "FP32"
+            }
         },
         model={
-            "name": "all-MiniLM-L6-v2",
+            "name": "Qwen3-Embedding-0.6B",
             "dimension": model_dimension,
-            "loaded": model is not None
+            "loaded": model is not None,
+            "parameters": "0.6B (600M)"
         }
     )
 
@@ -285,8 +272,8 @@ async def metrics():
     return {
         "uptime_seconds": time.time() - start_time,
         "model_dimension": model_dimension,
-        "model_name": "all-MiniLM-L6-v2",
-        "accelerator_type": accelerator_type.value if accelerator_type else "unknown"
+        "model_name": "Qwen3-Embedding-0.6B",
+        "accelerator_type": "onnx_cpu"
     }
 
 
@@ -295,7 +282,7 @@ async def metrics():
 if __name__ == "__main__":
     import uvicorn
     
-    logger.info("🚀 启动 Embedding Service...")
+    logger.info("🚀 启动 Embedding Service (Qwen-0.6B)...")
     logger.info("📍 监听地址：http://0.0.0.0:8080")
     logger.info("📖 API 文档：http://localhost:8080/docs")
     

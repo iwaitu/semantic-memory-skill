@@ -20,21 +20,14 @@ pydantic>=2.0.0
 py-cpuinfo>=9.0.0
 
 # ==============
-# 嵌入模型（所有平台通用）
-# ==============
-sentence-transformers>=2.2.0
-
-# ==============
-# 可选依赖（根据平台选择安装）
-# 由 install.sh 自动检测安装
+# 嵌入模型
 # ==============
 
-# Apple Silicon (MPS 加速)
-# torch with MPS support is included in sentence-transformers
+# Qwen3-Embedding-0.6B (推荐，1024 维，强语义理解)
+# 通过 optimum 加载 ONNX 模型
 
-# NVIDIA GPU (CUDA 加速)
-# torch with CUDA is included in sentence-transformers
-
-# ONNX Runtime (CPU 优化)
-# onnxruntime>=1.16.0
-# optimum[onnxruntime]>=1.17.0
+# ==============
+# 必需依赖
+# ==============
+onnxruntime>=1.16.0
+optimum[onnxruntime]>=1.17.0
