@@ -25,7 +25,7 @@ class SemanticMemory:
     
     功能：
     - 添加记忆片段
-    - 语义搜索记忆
+    - 语义搜索记忆（支持 Rerank 精排）
     - 删除记忆
     - 批量导入/导出
     """
@@ -34,6 +34,7 @@ class SemanticMemory:
         self,
         qdrant_url: str = "http://localhost:6333",
         embedding_url: str = "http://localhost:8080",
+        reranker_url: str = "http://localhost:8081",
         collection_name: str = "clawd_semantic_memory"
     ):
         """
@@ -52,6 +53,10 @@ class SemanticMemory:
         
         logger.info(f"连接 Embedding Service: {embedding_url}")
         self.embedding_client = EmbeddingClient(base_url=embedding_url)
+        
+        logger.info(f"连接 Reranker Service: {reranker_url}")
+        self.reranker_url = reranker_url
+        self.reranker_session = requests.Session()
         
         # 确保集合存在
         self._ensure_collection()
@@ -135,7 +140,9 @@ class SemanticMemory:
         query: str,
         limit: int = 5,
         score_threshold: float = 0.5,
-        filter_metadata: Optional[Dict[str, Any]] = None
+        filter_metadata: Optional[Dict[str, Any]] = None,
+        use_rerank: bool = False,
+        rerank_top_k: int = 50
     ) -> List[Dict[str, Any]]:
         """
         语义搜索记忆
@@ -165,18 +172,70 @@ class SemanticMemory:
                 )
             scroll_filter = models.Filter(must=conditions)
         
-        # 搜索 (使用 query 接口替代 search)
-        results = self.qdrant_client.query_points(
-            collection_name=self.collection_name,
-            query=query_embedding,
-            limit=limit,
-            score_threshold=score_threshold,
-            query_filter=scroll_filter
-        )
+        # 两阶段搜索：召回 + 精排
+        if use_rerank:
+            # 阶段 1: 向量召回 (Top-K)
+            logger.info(f"📥 阶段 1: 向量召回 (Top-{rerank_top_k})...")
+            recall_results = self.qdrant_client.query_points(
+                collection_name=self.collection_name,
+                query=query_embedding,
+                limit=rerank_top_k,
+                score_threshold=0.3,  # 降低阈值保证召回率
+                query_filter=scroll_filter
+            )
+            
+            if not recall_results.points:
+                logger.info("⚠️ 向量召回无结果")
+                return []
+            
+            # 阶段 2: Reranker 精排
+            logger.info(f"🔀 阶段 2: Reranker 精排...")
+            documents = [r.payload.get("text", "") for r in recall_results.points]
+            
+            try:
+                rerank_response = self.reranker_session.post(
+                    f"{self.reranker_url}/rerank",
+                    json={"query": query, "documents": documents, "top_k": limit},
+                    timeout=30
+                )
+                rerank_response.raise_for_status()
+                rerank_results = rerank_response.json()["results"]
+                
+                # 构建最终结果
+                memories = []
+                for r in rerank_results:
+                    original_result = recall_results.points[r["index"]]
+                    memories.append({
+                        "id": original_result.id,
+                        "text": original_result.payload.get("text", ""),
+                        "score": r["score"],  # Reranker 分数
+                        "rerank_score": r["score"],
+                        "vector_score": original_result.score,
+                        "rank": r["rank"],
+                        "metadata": {k: v for k, v in original_result.payload.items() if k != "text"},
+                        "created_at": original_result.payload.get("created_at", "")
+                    })
+                
+                logger.info(f"✅ Rerank 完成：返回 {len(memories)} 条结果")
+                return memories
+                
+            except Exception as e:
+                logger.warning(f"⚠️ Rerank 失败，回退到向量搜索：{e}")
+                # 回退到向量搜索
+                results = recall_results.points[:limit]
+        else:
+            # 单阶段：仅向量搜索
+            results = self.qdrant_client.query_points(
+                collection_name=self.collection_name,
+                query=query_embedding,
+                limit=limit,
+                score_threshold=score_threshold,
+                query_filter=scroll_filter
+            ).points
         
-        # 格式化结果
+        # 格式化结果（向量搜索）
         memories = []
-        for result in results.points:
+        for result in results:
             memories.append({
                 "id": result.id,
                 "text": result.payload.get("text", ""),

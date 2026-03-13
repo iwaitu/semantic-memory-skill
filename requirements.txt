@@ -29,5 +29,14 @@ py-cpuinfo>=9.0.0
 # ==============
 # 必需依赖
 # ==============
+
+# ONNX Runtime
 onnxruntime>=1.16.0
 optimum[onnxruntime]>=1.17.0
+
+# Transformers (用于 Reranker)
+transformers>=4.40.0
+torch>=2.0.0
+
+# ONNX 导出工具
+optimum[exporters]>=1.17.0
