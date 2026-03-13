@@ -1,0 +1,22 @@
+{
+  "qdrant": {
+    "url": "http://localhost:6333",
+    "api_key": "",
+    "collection_name": "clawd_semantic_memory"
+  },
+  "embedding": {
+    "url": "http://localhost:8080",
+    "model": "sentence-transformers/all-MiniLM-L6-v2",
+    "batch_size": 32,
+    "timeout_seconds": 30
+  },
+  "search": {
+    "default_limit": 5,
+    "default_score_threshold": 0.5,
+    "max_limit": 100
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "logs/semantic_memory.log"
+  }
+}
