@@ -1,5 +1,4 @@
 # Semantic Memory Skill - Python 依赖
-# 基础依赖 (平台无关)
 
 # Web 框架
 fastapi>=0.109.0
@@ -21,25 +20,21 @@ pydantic>=2.0.0
 py-cpuinfo>=9.0.0
 
 # ==============
-# 以下依赖由 install.sh 根据硬件自动选择安装
+# 嵌入模型（所有平台通用）
+# ==============
+sentence-transformers>=2.2.0
+
+# ==============
+# 可选依赖（根据平台选择安装）
+# 由 install.sh 自动检测安装
 # ==============
 
-# Apple Silicon (CoreML)
-# onnxruntime-coreml>=1.16.0
-# optimum[coreml]>=1.17.0
-# coremltools>=7.0
+# Apple Silicon (MPS 加速)
+# torch with MPS support is included in sentence-transformers
 
-# NVIDIA GPU (CUDA)
-# onnxruntime-gpu>=1.16.0
-# optimum[onnxruntime-gpu]>=1.17.0
+# NVIDIA GPU (CUDA 加速)
+# torch with CUDA is included in sentence-transformers
 
-# NVIDIA GPU (TensorRT)
-# tensorrt>=8.6.0
-# optimum[tensorrt]>=1.17.0
-
-# CPU (ONNX Runtime)
+# ONNX Runtime (CPU 优化)
 # onnxruntime>=1.16.0
 # optimum[onnxruntime]>=1.17.0
-
-# 嵌入模型 (所有平台通用)
-sentence-transformers>=2.2.0

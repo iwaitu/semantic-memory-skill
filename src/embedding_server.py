@@ -4,7 +4,7 @@ Embedding Service - 常驻文本嵌入服务
 """
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import time
 import logging
@@ -50,9 +50,9 @@ start_time = time.time()
 
 class EmbedRequest(BaseModel):
     """嵌入请求"""
-    texts: List[str]
-    normalize: bool = True
-    batch_size: int = 32
+    texts: List[str] = Field(..., min_length=1, max_length=1000, description="文本列表")
+    normalize: bool = Field(default=True, description="是否归一化向量")
+    batch_size: int = Field(default=32, ge=1, le=128, description="批量大小")
 
 
 class EmbedResponse(BaseModel):
@@ -109,46 +109,45 @@ async def load_model():
         start = time.time()
         
         try:
-            from optimum.intel import IPEXSentenceTransformer
+            # 优先使用 sentence-transformers（兼容性最好）
+            from sentence_transformers import SentenceTransformer
             
-            # 根据平台选择 provider
+            # 根据平台选择设备
             if accelerator_type == AcceleratorType.APPLE_COREML:
-                logger.info("   → 使用 CoreML 加速 (Apple Silicon)")
-                model = IPEXSentenceTransformer(
+                logger.info("   → 使用 MPS 加速 (Apple Silicon)")
+                model = SentenceTransformer(
                     "sentence-transformers/all-MiniLM-L6-v2",
-                    provider="coreml"
+                    device="mps"
                 )
             elif accelerator_type in [AcceleratorType.NVIDIA_CUDA, AcceleratorType.NVIDIA_TENSORRT]:
-                logger.info(f"   → 使用 {'TensorRT' if accelerator_type == AcceleratorType.NVIDIA_TENSORRT else 'CUDA'} 加速")
-                model = IPEXSentenceTransformer(
+                logger.info(f"   → 使用 CUDA 加速")
+                model = SentenceTransformer(
                     "sentence-transformers/all-MiniLM-L6-v2",
-                    provider="cuda",
-                    device=0
+                    device="cuda"
                 )
             else:
-                logger.info("   → 使用 ONNX Runtime (CPU)")
-                model = IPEXSentenceTransformer(
+                logger.info("   → 使用 CPU")
+                model = SentenceTransformer(
                     "sentence-transformers/all-MiniLM-L6-v2",
-                    provider="onnxruntime"
+                    device="cpu"
                 )
             
             # 预热
             logger.info("🔥 步骤 3/4: 模型预热...")
-            model.encode(["预热句子"])
+            model.encode(["预热句子"], show_progress_bar=False)
             
             # 获取维度
-            model_dimension = len(model.encode(["test"])[0])
+            model_dimension = len(model.encode(["test"], show_progress_bar=False)[0])
             
             load_time = time.time() - start
             logger.info(f"✅ 步骤 4/4: 模型加载完成 ({load_time:.2f}s)")
             logger.info(f"📏 向量维度：{model_dimension}")
             logger.info("=" * 60)
             
-        except Exception as e:
-            logger.error(f"❌ 模型加载失败：{e}")
-            logger.warning("⚠️ 回退到 CPU 模式...")
+        except ImportError as e:
+            logger.error(f"sentence-transformers 导入失败：{e}")
+            logger.warning("⚠️ 回退到 optimum.intel...")
             
-            # Fallback 到 CPU
             from optimum.intel import IPEXSentenceTransformer
             model = IPEXSentenceTransformer(
                 "sentence-transformers/all-MiniLM-L6-v2",
@@ -157,12 +156,13 @@ async def load_model():
             model.encode(["预热句子"])
             model_dimension = len(model.encode(["test"])[0])
             model_info = {
-                "provider": "ONNX Runtime",
+                "provider": "ONNX Runtime (Fallback)",
                 "device": "CPU",
                 "optimization": "Fallback"
             }
-            accelerator_type = AcceleratorType.CPU_ONNX
-            
+        
+        logger.info("🎉 服务启动完成")
+        
     except Exception as e:
         logger.error(f"❌ 启动失败：{e}")
         raise
@@ -199,9 +199,9 @@ async def embed(request: EmbedRequest):
     """
     批量文本嵌入
     
-    - **texts**: 文本列表
+    - **texts**: 文本列表 (1-1000 条)
     - **normalize**: 是否归一化向量 (默认 True)
-    - **batch_size**: 批量大小 (默认 32)
+    - **batch_size**: 批量大小 (1-128, 默认 32)
     """
     if not model:
         raise HTTPException(503, "模型加载中，请稍后重试")
@@ -210,8 +210,9 @@ async def embed(request: EmbedRequest):
     embeddings = model.encode(
         request.texts,
         normalize_embeddings=request.normalize,
-        batch_size=request.batch_size,
-        show_progress_bar=False
+        batch_size=min(request.batch_size, len(request.texts)),
+        show_progress_bar=False,
+        convert_to_numpy=True
     )
     elapsed_ms = (time.time() - start) * 1000
     
@@ -225,13 +226,13 @@ async def embed(request: EmbedRequest):
 
 
 @app.get("/embed/single", tags=["Embedding"])
-async def embed_single(text: str, normalize: bool = True):
+async def embed_single(text: str = Field(..., min_length=1, max_length=10000), normalize: bool = True):
     """单个文本嵌入"""
     if not model:
         raise HTTPException(503, "模型加载中，请稍后重试")
     
     start = time.time()
-    embedding = model.encode([text], normalize_embeddings=normalize)[0]
+    embedding = model.encode([text], normalize_embeddings=normalize, show_progress_bar=False)[0]
     elapsed_ms = (time.time() - start) * 1000
     
     return {
