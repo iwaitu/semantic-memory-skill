@@ -19,12 +19,16 @@
 
 ## 📦 快速开始
 
-### 1. 安装
+### 1. 安装到 OpenClaw
 
 ```bash
-git clone https://github.com/iwaitu/semantic-memory-skill.git
-cd semantic-memory-skill
-./install.sh
+# 克隆到 OpenClaw skills 目录
+cd ~/.openclaw/skills
+git clone https://github.com/iwaitu/semantic-memory-skill.git semantic-memory
+cd semantic-memory
+
+# 运行安装脚本
+./scripts/install.sh
 ```
 
 安装脚本会自动：
@@ -35,14 +39,32 @@ cd semantic-memory-skill
 
 ### 2. 使用
 
+#### OpenClaw 工具调用
+
+```python
+# 添加记忆
+memory_add(text="今天学习了语义搜索技术", metadata={"category": "learning"})
+
+# 搜索记忆
+memory_search(query="搜索技术", limit=5)
+
+# 删除记忆
+memory_delete(memory_id="xxx")
+
+# 查看统计
+memory_stats()
+```
+
 #### CLI 方式
 
 ```bash
+cd ~/.openclaw/skills/semantic-memory
+
 # 添加记忆
-python3 src/semantic_memory.py add --text "今天学习了语义搜索技术"
+python3 src/semantic_memory.py add --text "你的记忆"
 
 # 搜索记忆
-python3 src/semantic_memory.py search --query "搜索技术"
+python3 src/semantic_memory.py search --query "搜索内容" --limit 5
 
 # 查看统计
 python3 src/semantic_memory.py stats
@@ -74,26 +96,6 @@ results = memory.search_memories(
 
 for r in results:
     print(f"[{r['score']:.3f}] {r['text']}")
-
-# 统计信息
-stats = memory.get_stats()
-print(f"总记忆数：{stats['total_memories']}")
-```
-
-#### OpenClaw Skill 接口
-
-```python
-# 在 OpenClaw 中调用
-from semantic_memory import memory_add, memory_search, memory_delete
-
-# 添加记忆
-memory_id = memory_add("重要信息", {"category": "important"})
-
-# 搜索记忆
-results = memory_search("相关信息", limit=5)
-
-# 删除记忆
-memory_delete(memory_id)
 ```
 
 ## 🏗️ 架构
@@ -114,6 +116,26 @@ memory_delete(memory_id)
 │ - CUDA          │     │ - Similarity    │
 │ - ONNX          │     │ - Metadata      │
 └─────────────────┘     └─────────────────┘
+```
+
+## 📁 目录结构
+
+```
+~/.openclaw/skills/semantic-memory/
+├── SKILL.md                    # Skill 描述
+├── README.md                   # 完整文档
+├── requirements.txt            # Python 依赖
+├── src/                        # 源代码
+│   ├── hardware_detector.py    # 硬件检测
+│   ├── embedding_server.py     # FastAPI 服务
+│   ├── embedding_client.py     # 客户端
+│   └── semantic_memory.py      # 语义记忆管理器
+├── scripts/                    # 可执行脚本
+│   ├── install.sh              # 安装脚本
+│   └── benchmark.py            # 性能测试
+├── config/
+│   └── config.json             # 配置文件
+└── logs/                       # 日志目录
 ```
 
 ## 🔧 配置
@@ -177,7 +199,7 @@ launchctl load ~/Library/LaunchAgents/com.semantic-memory.embedding.plist
 launchctl unload ~/Library/LaunchAgents/com.semantic-memory.embedding.plist
 
 # 查看日志
-tail -f logs/embedding.log
+tail -f ~/.openclaw/skills/semantic-memory/logs/embedding.log
 ```
 
 ### Linux (systemd)
@@ -240,6 +262,13 @@ memories = [
 ]
 
 memory.batch_add_memories(memories)
+```
+
+## 🧪 性能测试
+
+```bash
+cd ~/.openclaw/skills/semantic-memory
+python3 scripts/benchmark.py
 ```
 
 ## 🐛 故障排除

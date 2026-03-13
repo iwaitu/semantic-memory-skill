@@ -1,7 +1,15 @@
 ---
 name: semantic-memory
-description: Cross-platform hardware-accelerated semantic memory skill for long-term context retrieval using Qdrant vector database
-metadata: {"clawdbot":{"requires":{"bins":["docker","python3"]},"install":["./install.sh"]}}
+description: Cross-platform hardware-accelerated semantic memory for OpenClaw using Qdrant vector database
+metadata:
+  {
+    "clawdbot":
+      {
+        "requires": { "bins": ["docker", "python3", "uv"] },
+        "install": ["./scripts/install.sh"],
+        "env": { "QDRANT_URL": "http://localhost:6333", "EMBEDDING_URL": "http://localhost:8080" }
+      }
+  }
 ---
 
 # Semantic Memory Skill
@@ -12,7 +20,7 @@ metadata: {"clawdbot":{"requires":{"bins":["docker","python3"]},"install":["./in
 
 ```bash
 cd ~/.openclaw/skills/semantic-memory
-./install.sh
+./scripts/install.sh
 ```
 
 安装后自动启动：
@@ -48,9 +56,6 @@ python3 src/semantic_memory.py search --query "搜索内容" --limit 5
 
 # 查看统计
 python3 src/semantic_memory.py stats
-
-# 删除记忆
-python3 src/semantic_memory.py delete --id <memory_id>
 ```
 
 ### Python API
@@ -65,9 +70,6 @@ memory_id = memory.add_memory("文本", {"key": "value"})
 
 # 搜索
 results = memory.search_memories("查询", limit=5)
-
-# 批量添加
-memory.batch_add_memories([{"text": "...", "metadata": {...}}])
 ```
 
 ## API 端点
@@ -104,7 +106,7 @@ launchctl load ~/Library/LaunchAgents/com.semantic-memory.embedding.plist
 launchctl unload ~/Library/LaunchAgents/com.semantic-memory.embedding.plist
 
 # 日志
-tail -f logs/embedding.log
+tail -f ~/.openclaw/skills/semantic-memory/logs/embedding.log
 ```
 
 ### Linux
@@ -137,13 +139,10 @@ curl http://localhost:8080/health
 curl http://localhost:6333/
 
 # 查看日志
-tail -f logs/embedding.log
+tail -f ~/.openclaw/skills/semantic-memory/logs/embedding.log
 
 # 重启服务
 # macOS:
 launchctl unload ~/Library/LaunchAgents/com.semantic-memory.embedding.plist
 launchctl load ~/Library/LaunchAgents/com.semantic-memory.embedding.plist
-
-# Linux:
-sudo systemctl restart semantic-memory-embedding
 ```

@@ -2,10 +2,11 @@
 set -e
 
 # Semantic Memory Skill 安装脚本
-# 支持跨平台硬件加速：CoreML (Apple), CUDA/TensorRT (NVIDIA), ONNX (CPU)
+# 自动安装到 ~/.openclaw/skills/semantic-memory/
 
-SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SKILL_DIR"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SKILL_ROOT="$(dirname "$SCRIPT_DIR")"
+TARGET_DIR="$HOME/.openclaw/skills/semantic-memory"
 
 echo "========================================"
 echo "🚀 Semantic Memory Skill 安装程序"
@@ -16,47 +17,74 @@ echo ""
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# ============== 1. 系统检查 ==============
+# ============== 1. 创建目标目录 ==============
 
-echo "📋 步骤 1/6: 系统检查..."
+echo "📋 步骤 1/7: 创建安装目录..."
+
+mkdir -p "$TARGET_DIR"
+echo "  目标目录：$TARGET_DIR"
+
+# ============== 2. 复制文件 ==============
+
+echo ""
+echo "📦 步骤 2/7: 复制文件..."
+
+# 复制源代码
+cp -r "$SKILL_ROOT/src" "$TARGET_DIR/"
+echo "  ✅ src/"
+
+# 复制脚本
+cp -r "$SKILL_ROOT/scripts" "$TARGET_DIR/"
+echo "  ✅ scripts/"
+
+# 复制配置
+mkdir -p "$TARGET_DIR/config"
+cp "$SKILL_ROOT/config/config.json.example" "$TARGET_DIR/config/config.json" 2>/dev/null || true
+echo "  ✅ config/"
+
+# 复制依赖
+cp "$SKILL_ROOT/requirements.txt" "$TARGET_DIR/"
+echo "  ✅ requirements.txt"
+
+# 复制文档
+cp "$SKILL_ROOT/README.md" "$TARGET_DIR/" 2>/dev/null || true
+echo "  ✅ README.md"
+
+# 创建日志目录
+mkdir -p "$TARGET_DIR/logs"
+echo "  ✅ logs/"
+
+# ============== 3. 系统检查 ==============
+
+echo ""
+echo "🔍 步骤 3/7: 系统检查..."
 
 # 检查 Python
 if ! command -v python3 &> /dev/null; then
     echo -e "${RED}❌ Python3 未安装${NC}"
-    echo "请先安装 Python 3.9+"
     exit 1
 fi
-PYTHON_VERSION=$(python3 --version | awk '{print $2}')
-echo -e "  ✅ Python: ${PYTHON_VERSION}"
+echo -e "  ✅ Python: $(python3 --version | awk '{print $2}')"
 
-# 检查 pip
-if ! python3 -m pip --version &> /dev/null; then
-    echo -e "${RED}❌ pip 未安装${NC}"
-    exit 1
-fi
-echo -e "  ✅ pip: 已安装"
-
-# 检查 Docker (用于 Qdrant)
+# 检查 Docker
 if ! command -v docker &> /dev/null; then
-    echo -e "${YELLOW}⚠️  Docker 未安装${NC}"
-    echo "  Qdrant 需要 Docker，请安装后重新运行"
-    echo "  macOS: brew install --cask docker"
-    echo "  Linux: https://docs.docker.com/engine/install/"
+    echo -e "${RED}❌ Docker 未安装${NC}"
+    echo "  请安装 Docker 后重新运行"
     exit 1
 fi
 echo -e "  ✅ Docker: 已安装"
 
-# ============== 2. 硬件检测 ==============
+# ============== 4. 硬件检测 ==============
 
 echo ""
-echo "🔍 步骤 2/6: 硬件检测..."
+echo "🔍 步骤 4/7: 硬件检测..."
 
-python3 << 'EOF'
+python3 << EOF
 import sys
-sys.path.insert(0, 'src')
-from hardware_detector import HardwareDetector, AcceleratorType
+sys.path.insert(0, '$TARGET_DIR/src')
+from hardware_detector import HardwareDetector
 
 accel_type = HardwareDetector.detect()
 info = HardwareDetector.get_accelerator_info(accel_type)
@@ -67,18 +95,17 @@ print(f"  设备：{info['device']}")
 print(f"  预期延迟：{info['expected_latency_ms']}ms/句子")
 EOF
 
-# ============== 3. 安装 Python 依赖 ==============
+# ============== 5. 安装 Python 依赖 ==============
 
 echo ""
-echo "📦 步骤 3/6: 安装 Python 依赖..."
+echo "📦 步骤 5/7: 安装 Python 依赖..."
 
 python3 -m pip install --upgrade pip -q
 
-# 根据硬件安装对应加速包
-python3 << 'EOF'
+python3 << EOF
 import sys
 import subprocess
-sys.path.insert(0, 'src')
+sys.path.insert(0, '$TARGET_DIR/src')
 from hardware_detector import HardwareDetector
 
 accel_type = HardwareDetector.detect()
@@ -89,10 +116,9 @@ for pkg in packages:
     print(f"    - {pkg}")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", pkg])
 
-# 安装其他依赖
 other_packages = [
     "fastapi>=0.109.0",
-    "uvicorn>=0.27.0",
+    "uvicorn[standard]>=0.27.0",
     "qdrant-client>=1.7.0",
     "requests>=2.31.0",
     "psutil>=5.9.0",
@@ -101,16 +127,15 @@ other_packages = [
 
 print(f"  安装其他依赖:")
 for pkg in other_packages:
-    print(f"    - {pkg}")
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", pkg])
 
 print("  ✅ 依赖安装完成")
 EOF
 
-# ============== 4. 启动 Qdrant ==============
+# ============== 6. 启动 Qdrant ==============
 
 echo ""
-echo "📦 步骤 4/6: 启动 Qdrant..."
+echo "📦 步骤 6/7: 启动 Qdrant..."
 
 if docker ps | grep -q qdrant-semantic-memory; then
     echo "  ⚠️  Qdrant 已在运行"
@@ -125,7 +150,6 @@ else
     sleep 3
 fi
 
-# 验证 Qdrant
 for i in {1..10}; do
     if curl -s http://localhost:6333/ | grep -q "qdrant"; then
         echo "  ✅ Qdrant 已就绪"
@@ -135,19 +159,16 @@ for i in {1..10}; do
     sleep 2
 done
 
-# ============== 5. 注册系统服务 ==============
+# ============== 7. 注册系统服务 ==============
 
 echo ""
-echo "📦 步骤 5/6: 注册 Embedding Service 系统服务..."
-
-# 创建日志目录
-mkdir -p logs
+echo "📦 步骤 7/7: 注册 Embedding Service 系统服务..."
 
 # macOS (launchd)
 if [[ "$OSTYPE" == "darwin"* ]]; then
     PLIST_FILE="$HOME/Library/LaunchAgents/com.semantic-memory.embedding.plist"
     
-    cat > "$PLIST_FILE" << EOF
+    cat > "$PLIST_FILE" << PLISTEOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -157,23 +178,22 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     <key>ProgramArguments</key>
     <array>
         <string>python3</string>
-        <string>$SKILL_DIR/src/embedding_server.py</string>
+        <string>$TARGET_DIR/src/embedding_server.py</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>$SKILL_DIR</string>
+    <string>$TARGET_DIR</string>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>$SKILL_DIR/logs/embedding.log</string>
+    <string>$TARGET_DIR/logs/embedding.log</string>
     <key>StandardErrorPath</key>
-    <string>$SKILL_DIR/logs/embedding.err</string>
+    <string>$TARGET_DIR/logs/embedding.err</string>
 </dict>
 </plist>
-EOF
+PLISTEOF
     
-    # 加载服务
     launchctl unload "$PLIST_FILE" 2>/dev/null || true
     launchctl load "$PLIST_FILE"
     echo "  ✅ 已注册为 launchd 服务"
@@ -182,7 +202,7 @@ EOF
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     SERVICE_FILE="/etc/systemd/system/semantic-memory-embedding.service"
     
-    sudo cat > "$SERVICE_FILE" << EOF
+    sudo cat > "$SERVICE_FILE" << SERVICEEOF
 [Unit]
 Description=Semantic Memory Embedding Service
 After=network.target
@@ -190,16 +210,16 @@ After=network.target
 [Service]
 Type=simple
 User=$USER
-WorkingDirectory=$SKILL_DIR
-ExecStart=$(which python3) $SKILL_DIR/src/embedding_server.py
+WorkingDirectory=$TARGET_DIR
+ExecStart=$(which python3) $TARGET_DIR/src/embedding_server.py
 Restart=always
 RestartSec=5
-StandardOutput=append:$SKILL_DIR/logs/embedding.log
-StandardError=append:$SKILL_DIR/logs/embedding.err
+StandardOutput=append:$TARGET_DIR/logs/embedding.log
+StandardError=append:$TARGET_DIR/logs/embedding.err
 
 [Install]
 WantedBy=multi-user.target
-EOF
+SERVICEEOF
     
     sudo systemctl daemon-reload
     sudo systemctl enable semantic-memory-embedding
@@ -207,12 +227,11 @@ EOF
     echo "  ✅ 已注册为 systemd 服务"
 fi
 
-# ============== 6. 验证服务 ==============
+# ============== 验证服务 ==============
 
 echo ""
-echo "🔍 步骤 6/6: 验证服务..."
+echo "🔍 验证服务..."
 
-# 等待服务启动
 echo "  等待 Embedding Service 启动..."
 sleep 5
 
@@ -229,32 +248,29 @@ done
 # 性能测试
 echo ""
 echo "⚡ 性能测试..."
-python3 << 'EOF'
+python3 << EOF
 import sys
-sys.path.insert(0, 'src')
+sys.path.insert(0, '$TARGET_DIR/src')
 from embedding_client import EmbeddingClient
 import time
 
 client = EmbeddingClient()
-
-# 健康检查
 health = client.health_check()
-if health.get("status") != "healthy":
-    print("  ❌ 服务未就绪")
-    sys.exit(1)
 
-print(f"  加速器：{health.get('accelerator')}")
-print(f"  模型维度：{health.get('dimension')}")
-
-# 批量测试
-texts = [f"测试句子{i}" for i in range(100)]
-start = time.time()
-embeddings = client.embed(texts)
-elapsed = (time.time() - start) * 1000
-
-print(f"  批量嵌入：{len(texts)} 条")
-print(f"  总耗时：{elapsed:.2f}ms")
-print(f"  平均：{elapsed/100:.2f}ms/句子")
+if health.get("status") == "healthy":
+    print(f"  加速器：{health.get('accelerator')}")
+    print(f"  模型维度：{health.get('dimension')}")
+    
+    texts = [f"测试句子{i}" for i in range(100)]
+    start = time.time()
+    embeddings = client.embed(texts)
+    elapsed = (time.time() - start) * 1000
+    
+    print(f"  批量嵌入：{len(texts)} 条")
+    print(f"  总耗时：{elapsed:.2f}ms")
+    print(f"  平均：{elapsed/100:.2f}ms/句子")
+else:
+    print("  ⚠️ 服务未完全就绪，请稍后检查")
 EOF
 
 # ============== 完成 ==============
@@ -264,12 +280,14 @@ echo "========================================"
 echo -e "${GREEN}🎉 安装完成！${NC}"
 echo "========================================"
 echo ""
+echo "📍 安装目录：$TARGET_DIR"
 echo "📍 服务地址:"
 echo "  - Embedding Service: http://localhost:8080"
 echo "  - Qdrant: http://localhost:6333"
 echo "  - API 文档：http://localhost:8080/docs"
 echo ""
 echo "📖 使用方法:"
+echo "  cd $TARGET_DIR"
 echo "  python3 src/semantic_memory.py add --text '你的记忆'"
 echo "  python3 src/semantic_memory.py search --query '搜索内容'"
 echo ""
@@ -280,7 +298,6 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
     echo "  - 启动：sudo systemctl start semantic-memory-embedding"
     echo "  - 停止：sudo systemctl stop semantic-memory-embedding"
-    echo "  - 日志：sudo journalctl -u semantic-memory-embedding -f"
 fi
-echo "  - 日志：tail -f $SKILL_DIR/logs/embedding.log"
+echo "  - 日志：tail -f $TARGET_DIR/logs/embedding.log"
 echo ""

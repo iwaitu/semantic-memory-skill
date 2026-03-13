@@ -58,3 +58,6 @@ htmlcov/
 tmp/
 temp/
 *.tmp
+
+# Installed skill (this is where the skill gets installed)
+~/.openclaw/skills/semantic-memory/
