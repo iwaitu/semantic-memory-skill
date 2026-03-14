@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.semantic-memory.grpc-server</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/iwaitu/github/semantic-memory-skill/.venv/bin/python</string>
+        <string>/Users/iwaitu/github/semantic-memory-skill/src/grpc_server.py</string>
+    </array>
+    
+    <key>WorkingDirectory</key>
+    <string>/Users/iwaitu/github/semantic-memory-skill</string>
+    
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <key>KeepAlive</key>
+    <true/>
+    
+    <key>StandardOutPath</key>
+    <string>/Users/iwaitu/github/semantic-memory-skill/logs/grpc-server.out</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/Users/iwaitu/github/semantic-memory-skill/logs/grpc-server.err</string>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+        <key>GRPC_SERVER_PORT</key>
+        <string>50051</string>
+    </dict>
+    
+    <key>ProcessType</key>
+    <string>Background</string>
+    
+    <key>LowPriorityIO</key>
+    <true/>
+</dict>
+</plist>

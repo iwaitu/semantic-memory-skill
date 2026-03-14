@@ -38,9 +38,10 @@ logs/
 *.log
 
 # Models (will be downloaded automatically)
-models/optimized/
-models/*.mlmodel
-models/*.engine
+models/
+/models/**
+models/.DS_Store
+models/**/.cache/
 
 # Config (keep example, ignore actual config)
 config/config.json

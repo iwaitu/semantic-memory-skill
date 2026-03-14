@@ -65,6 +65,10 @@ class HardwareDetector:
     @staticmethod
     def _is_apple_silicon() -> bool:
         """检测是否为 Apple Silicon (M1/M2/M3)"""
+        machine = platform.machine().lower()
+        if machine in {"arm64", "aarch64"}:
+            return True
+
         try:
             result = subprocess.run(
                 ["sysctl", "-n", "machdep.cpu.brand_string"],

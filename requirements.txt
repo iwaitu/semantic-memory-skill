@@ -1,42 +1,7 @@
-# Semantic Memory Skill - Python 依赖
-
-# Web 框架
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-
-# 向量数据库客户端
-qdrant-client>=1.7.0
-
-# HTTP 客户端
-requests>=2.31.0
-
-# 系统监控
-psutil>=5.9.0
-
-# 数据验证
-pydantic>=2.0.0
-
-# 硬件检测
-py-cpuinfo>=9.0.0
-
-# ==============
-# 嵌入模型
-# ==============
-
-# Qwen3-Embedding-0.6B (推荐，1024 维，强语义理解)
-# 通过 optimum 加载 ONNX 模型
-
-# ==============
-# 必需依赖
-# ==============
-
-# ONNX Runtime
+grpcio>=1.60.0
+grpcio-tools>=1.60.0
+huggingface_hub>=0.28.0
 onnxruntime>=1.16.0
-optimum[onnxruntime]>=1.17.0
-
-# Transformers (用于 Reranker)
-transformers>=4.40.0
-torch>=2.0.0
-
-# ONNX 导出工具
-optimum[exporters]>=1.17.0
+transformers>=4.37.0
+numpy>=1.24.0
+sqlite-vec>=0.1.0
