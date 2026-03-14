@@ -5,7 +5,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 MODELS_DIR="$PROJECT_DIR/models"
-EMB_REPO_ID="iwaitu/Qwen3-Embedding-0.6B-ONNX"
+EMB_REPO_ID="iwaitu/qwen3-embedding-0.6b-onnx"
 RERANK_REPO_ID="zhiqing/Qwen3-Reranker-0.6B-seq-cls-ONNX"
 EMB_MODEL_DIR="$MODELS_DIR/qwen3-embedding-0.6b-onnx"
 RERANK_MODEL_DIR="$MODELS_DIR/qwen3-reranker-seq-cls-onnx"
