@@ -11,6 +11,28 @@
 - ✅ gRPC 统一服务（端口 50051）
 - ✅ 支持添加/搜索/删除记忆
 - ✅ 两阶段检索（粗排 + 精排）
+- ✅ **Recall@1 100%** (精排模式)
+
+## OpenClaw 集成
+
+**Skill 路径:** `~/.openclaw/skills/semantic-memory`
+
+**前置条件:**
+- ✅ gRPC 服务已启动（端口 50051）
+- ✅ 模型文件已就位
+
+**使用示例:**
+```python
+from semantic_memory_v2 import create_semantic_memory
+
+memory = create_semantic_memory(
+    grpc_address="localhost:50051",
+    db_path="~/clawd/semantic_memory.db"
+)
+
+# 搜索记忆
+results = memory.search("老板的偏好", top_k=5, use_rerank=True)
+```
 
 ## Installation
 

@@ -8,7 +8,7 @@ MODELS_DIR="$PROJECT_DIR/models"
 EMB_REPO_ID="iwaitu/Qwen3-Embedding-0.6B-ONNX"
 RERANK_REPO_ID="zhiqing/Qwen3-Reranker-0.6B-seq-cls-ONNX"
 EMB_MODEL_DIR="$MODELS_DIR/qwen3-embedding-0.6b-onnx"
-RERANK_MODEL_DIR="$MODELS_DIR/qwen3-reranker-batch-onnx"
+RERANK_MODEL_DIR="$MODELS_DIR/qwen3-reranker-seq-cls-onnx"
 
 echo "🔧 安装 Semantic Memory Skill..."
 echo ""

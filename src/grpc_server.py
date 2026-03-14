@@ -15,7 +15,7 @@ from hardware_detector import AcceleratorType, HardwareDetector
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 EMBEDDING_DIR_DEFAULT = os.path.join(MODELS_DIR, "qwen3-embedding-0.6b-onnx")
-QWEN_RERANKER_DIR_DEFAULT = os.path.join(MODELS_DIR, "qwen3-reranker-batch-onnx")
+QWEN_RERANKER_DIR_DEFAULT = os.path.join(MODELS_DIR, "qwen3-reranker-seq-cls-onnx")
 
 
 def _resolve_model_file(model_dir, filename="model.onnx"):
